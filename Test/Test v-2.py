@@ -1,5 +1,9 @@
 import yfinance as yf
 import pandas as pd
+import sys
+
+# Fix encoding error in Windows cmd/terminal
+sys.stdout.reconfigure(encoding='utf-8')
 
 def fetch_data(ticker, start, end, interval="5m"):
     data = yf.download(ticker, start=start, end=end, interval=interval)
@@ -24,67 +28,68 @@ def detect_pattern(df, ticker="RELIANCE.NS"):
     
     results = []
     unique_dates = df['Date'].dt.date.unique()
-    
+
+    print(f"Detecting patterns for {ticker}... Total Days: {len(unique_dates)}")
+
     for date in unique_dates:
         daily_data = df[df['Date'].dt.date == date]
+        print(f"\nProcessing {date} - Total Rows: {len(daily_data)}")
+
         if daily_data.empty:
             continue
         
-        # Get previous day's data using a 1-day offset
-        prev_day_data = df[df['Date'] < pd.to_datetime(date)].iloc[-1:]
+        # Get previous day's last row
+        prev_day_data = df[df['Date'] < pd.to_datetime(date)]
         if prev_day_data.empty:
+            print(f"No previous day data for {date}, skipping...")
             continue
         
-        prev_close_value = prev_day_data.iloc[-1][f'Close_{ticker}']
-        first_open_value = daily_data.iloc[0][f'Open_{ticker}']
+        prev_close_value = prev_day_data.iloc[-1]['Close']
+        first_open_value = daily_data.iloc[0]['Open']
         
-        print(f"Date: {date}, Prev Close: {prev_close_value}, Today's Open: {first_open_value}")
+        print(f"Prev Close: {prev_close_value}, Today's Open: {first_open_value}")
         
-        # Check if there's any gap (non-equality implies a gap)
+        # Check if there's a gap
         if first_open_value != prev_close_value:
             print(f"Gap detected on {date}")
-            mother_candle = daily_data.iloc[0]  # First 5-minute candle of the day
-            
-            # Collect consecutive baby candles immediately after the mother candle
+
+            mother_candle = daily_data.iloc[0]  # First 5-minute candle
             baby_candles = []
+
             for i in range(1, len(daily_data)):
                 candle = daily_data.iloc[i]
-                # Candle is inside the mother candle if its high is lower and its low is higher
-                if candle[f'High_{ticker}'] < mother_candle[f'High_{ticker}'] and candle[f'Low_{ticker}'] > mother_candle[f'Low_{ticker}']:
+                if candle['High'] < mother_candle['High'] and candle['Low'] > mother_candle['Low']:
                     baby_candles.append(candle)
                 else:
-                    break  # Stop if a candle is not fully inside
+                    break  # Stop if candle is outside
+
+            print(f"Inside candles found: {len(baby_candles)}")
             
-            if baby_candles:
-                print(f"Inside candles found on {date}, Count: {len(baby_candles)}")
-            
-            # Check if we have at least 3 consecutive baby candles
             if len(baby_candles) >= 3:
-                breakout_index = 1 + len(baby_candles)  # Mother candle is index 0, baby candles follow
+                breakout_index = 1 + len(baby_candles)
                 if breakout_index < len(daily_data):
                     breakout_candle = daily_data.iloc[breakout_index]
-                    stop_loss = (mother_candle[f'High_{ticker}'] - mother_candle[f'Low_{ticker}']) / 2
-                    target = max(1.5 * stop_loss, breakout_candle[f'Close_{ticker}'] + stop_loss)
-                    
+                    stop_loss = (mother_candle['High'] - mother_candle['Low']) / 2
+                    target = max(1.5 * stop_loss, breakout_candle['Close'] + stop_loss)
+
                     results.append({
                         'Date': date,
-                        'Mother High': mother_candle[f'High_{ticker}'],
-                        'Mother Low': mother_candle[f'Low_{ticker}'],
-                        'Breakout Price': breakout_candle[f'Close_{ticker}'],
+                        'Mother High': mother_candle['High'],
+                        'Mother Low': mother_candle['Low'],
+                        'Breakout Price': breakout_candle['Close'],
                         'Stop Loss': stop_loss,
                         'Target': target
                     })
-    
+                else:
+                    print(f"No breakout found for {date}")
+
+    print(f"\n✅ Found {len(results)} valid breakout patterns for {ticker}.")
     return results
 
 def backtest(ticker, start_date, end_date):
     df = fetch_data(ticker, start_date, end_date)
     if df is None:
         return
-    
-    print(df.head())  # Debugging: Check data
-    print(df.columns)  # Debugging: Check available columns
-    print(df['Date'].dt.date.unique())  # Debugging: Check available dates
     
     patterns = detect_pattern(df, ticker)
     if not patterns:
@@ -93,7 +98,8 @@ def backtest(ticker, start_date, end_date):
     
     results_df = pd.DataFrame(patterns)
     results_df.to_csv("backtest_results.csv", index=False)
-    print("Backtest results saved to backtest_results.csv")
+    print("\n✅ Backtest results saved to backtest_results.csv")
+    print("\n🔹 Backtest Performance Summary 🔹")  # No more encoding issues!
 
 # Parameters
 ticker = "RELIANCE.NS"

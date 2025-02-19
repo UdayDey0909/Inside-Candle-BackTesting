@@ -1,6 +1,5 @@
 import yfinance as yf
 import pandas as pd
-import matplotlib.pyplot as plt
 
 def fetch_data(ticker, start, end, interval="5m"):
     data = yf.download(ticker, start=start, end=end, interval=interval)
@@ -75,27 +74,6 @@ def detect_pattern(df, ticker="RELIANCE.NS", min_gap_pct=0.5):
     
     return results
 
-def plot_trades(df, ticker, patterns):
-    """Plot price movement with detected patterns"""
-    for pattern in patterns:
-        date = pattern['Date']
-        daily_data = df[df['Date'].dt.date == date]
-        
-        plt.figure(figsize=(10, 5))
-        plt.plot(daily_data['Date'], daily_data[f'Close_{ticker}'], label="Close Price", color='blue')
-        
-        # Highlight mother candle and breakout candle
-        plt.axhline(pattern['Mother High'], color='red', linestyle='--', label="Mother High")
-        plt.axhline(pattern['Mother Low'], color='green', linestyle='--', label="Mother Low")
-        plt.axhline(pattern['Breakout Price'], color='orange', linestyle='-.', label="Breakout Price")
-        
-        plt.title(f"Price Movement on {date} - {ticker}")
-        plt.xlabel("Time")
-        plt.ylabel("Price")
-        plt.legend()
-        plt.grid()
-        plt.show()
-
 def backtest(tickers, start_date, end_date, min_gap_pct=0.5):
     all_results = []
 
@@ -111,7 +89,6 @@ def backtest(tickers, start_date, end_date, min_gap_pct=0.5):
             continue
         
         all_results.extend(patterns)
-        plot_trades(df, ticker, patterns)
     
     if all_results:
         results_df = pd.DataFrame(all_results)

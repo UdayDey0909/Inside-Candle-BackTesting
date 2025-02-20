@@ -39,31 +39,35 @@ def detect_gap_patterns(df):
         
         if len(baby_candles) >= 3:
             breakout_index = 1 + len(baby_candles)
-            if breakout_index < len(daily_data) - 1:
+            if breakout_index < len(daily_data) - 1:  # Ensure there is a next candle
                 breakout_candle = daily_data.iloc[breakout_index]
-                next_candle = daily_data.iloc[[breakout_index + 1]]  # Ensure next_candle is a DataFrame
+                next_candle = daily_data.iloc[breakout_index + 1] if breakout_index + 1 < len(daily_data) else None
                 
-                stop_loss = (mother_candle['High'] - mother_candle['Low']) / 2
-                target = breakout_candle['Close'] + stop_loss * 1.5
+                breakout_side = None
+                stop_loss = None
                 
-                breakout_side = "Unknown"
-                if not next_candle.empty:
-                    if breakout_candle['High'] > mother_candle['High'] and next_candle['Open'].iloc[0] > mother_candle['High']:
-                        breakout_side = "Buy"
-                    elif breakout_candle['Low'] < mother_candle['Low'] and next_candle['Open'].iloc[0] < mother_candle['Low']:
-                        breakout_side = "Short"
+                mother_range = mother_candle['High'] - mother_candle['Low']
+                stop_loss_distance = mother_range / 2  # Half of the mother candle's range
                 
-                results.append({
-                    'Date': date,
-                    'Gap': f"{round(gap_amount, 2)} ({round(gap_percentage, 2)}%)",
-                    'High': mother_candle['High'],
-                    'Low': mother_candle['Low'],
-                    'Breakout Price': breakout_candle['Close'],
-                    'Breakout Side': breakout_side,
-                    'Stop Loss': stop_loss,
-                    'Target': target
-
-                })
+                if breakout_candle['High'] > mother_candle['High'] and next_candle is not None and next_candle['Open'] > mother_candle['High']:
+                    breakout_side = "Buy"
+                    stop_loss = mother_candle['High'] - stop_loss_distance
+                elif breakout_candle['Low'] < mother_candle['Low'] and next_candle is not None and next_candle['Open'] < mother_candle['Low']:
+                    breakout_side = "Short"
+                    stop_loss = mother_candle['Low'] + stop_loss_distance
+                
+                if breakout_side:
+                    target = breakout_candle['Close'] + (breakout_candle['Close'] - stop_loss) * 1.5
+                    results.append({
+                        'Date': date,
+                        'Gap': f"{round(gap_amount, 2)} ({round(gap_percentage, 2)}%)",
+                        'High': mother_candle['High'],
+                        'Low': mother_candle['Low'],
+                        'Breakout Price': breakout_candle['Close'],
+                        'Breakout Side': breakout_side,
+                        'Stop Loss': stop_loss,  # Absolute price level for stop loss
+                        'Target': target
+                    })
     
     print(f"✅ {len(results)} valid breakout patterns found.")
     return results

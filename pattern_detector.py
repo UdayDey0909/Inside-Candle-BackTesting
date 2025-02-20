@@ -39,12 +39,19 @@ def detect_gap_patterns(df):
         
         if len(baby_candles) >= 3:
             breakout_index = 1 + len(baby_candles)
-            if breakout_index < len(daily_data):
+            if breakout_index < len(daily_data) - 1:
                 breakout_candle = daily_data.iloc[breakout_index]
+                next_candle = daily_data.iloc[[breakout_index + 1]]  # Ensure next_candle is a DataFrame
+                
                 stop_loss = (mother_candle['High'] - mother_candle['Low']) / 2
                 target = breakout_candle['Close'] + stop_loss * 1.5
                 
-                breakout_side = "Buy" if breakout_candle['Close'] > mother_candle['High'] else "Short"
+                breakout_side = "Unknown"
+                if not next_candle.empty:
+                    if breakout_candle['High'] > mother_candle['High'] and next_candle['Open'].iloc[0] > mother_candle['High']:
+                        breakout_side = "Buy"
+                    elif breakout_candle['Low'] < mother_candle['Low'] and next_candle['Open'].iloc[0] < mother_candle['Low']:
+                        breakout_side = "Short"
                 
                 results.append({
                     'Date': date,
@@ -55,6 +62,7 @@ def detect_gap_patterns(df):
                     'Breakout Side': breakout_side,
                     'Stop Loss': stop_loss,
                     'Target': target
+
                 })
     
     print(f"✅ {len(results)} valid breakout patterns found.")

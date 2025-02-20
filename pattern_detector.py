@@ -64,7 +64,7 @@ def detect_gap_patterns(df):
                     continue
                 
                 # Check if target or stop-loss is hit first
-                trade_result = "Open"
+                trade_result = "Sideways"
                 for i in range(breakout_index + 1, len(daily_data)):
                     candle = daily_data.iloc[i]
                     if breakout_side == "Buy":
@@ -82,6 +82,7 @@ def detect_gap_patterns(df):
                             trade_result = "Target Hit"
                             break
                 
+                # If trade_result remains unchanged, the trade is sideways
                 results.append({
                     'Date': date,
                     'Gap': f"{round(gap_amount, 2)} ({round(gap_percentage, 2)}%)",

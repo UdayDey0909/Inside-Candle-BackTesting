@@ -44,12 +44,15 @@ def detect_gap_patterns(df):
                 stop_loss = (mother_candle['High'] - mother_candle['Low']) / 2
                 target = breakout_candle['Close'] + stop_loss * 1.5
                 
+                breakout_side = "Buy" if breakout_candle['Close'] > mother_candle['High'] else "Short"
+                
                 results.append({
                     'Date': date,
                     'Gap': f"{round(gap_amount, 2)} ({round(gap_percentage, 2)}%)",
-                    'Mother High': mother_candle['High'],
-                    'Mother Low': mother_candle['Low'],
+                    'High': mother_candle['High'],
+                    'Low': mother_candle['Low'],
                     'Breakout Price': breakout_candle['Close'],
+                    'Breakout Side': breakout_side,
                     'Stop Loss': stop_loss,
                     'Target': target
                 })

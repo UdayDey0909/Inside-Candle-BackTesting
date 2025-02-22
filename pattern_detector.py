@@ -1,7 +1,7 @@
 import pandas as pd
 
 def detect_gap_patterns(df):
-    """Identify gap-up/gap-down breakouts with inside candles."""
+    """Identify gap-up/gap-down breakouts with inside candles and implement a dynamic trailing stop-loss."""
     required_columns = ['Date', 'Close', 'Open', 'High', 'Low']
     if not all(col in df.columns for col in required_columns):
         print("❌ Missing required columns in dataset!")
@@ -20,9 +20,8 @@ def detect_gap_patterns(df):
         prev_close = prev_day_data.iloc[-1]['Close']
         first_open = daily_data.iloc[0]['Open']
         
-        # Calculate Gap Amount and Percentage
-        gap_amount = first_open - prev_close
-        gap_percentage = (gap_amount / prev_close) * 100
+        gap_amount = round(first_open - prev_close, 2)
+        gap_percentage = round((gap_amount / prev_close) * 100, 2)
 
         if first_open == prev_close:
             continue  # No gap detected, skip this day
@@ -39,61 +38,77 @@ def detect_gap_patterns(df):
         
         if len(baby_candles) >= 3:
             breakout_index = 1 + len(baby_candles)
-            if breakout_index < len(daily_data) - 1:  # Ensure there is a next candle
+            if breakout_index < len(daily_data) - 1:
                 breakout_candle = daily_data.iloc[breakout_index]
                 next_candle = daily_data.iloc[breakout_index + 1] if breakout_index + 1 < len(daily_data) else None
                 
                 breakout_side = None
                 stop_loss = None
                 target = None
+                trailing_stop = None
                 
-                mother_range = mother_candle['High'] - mother_candle['Low']
-                stop_loss_value = mother_range / 2
+                mother_range = round(mother_candle['High'] - mother_candle['Low'], 2)
+                risk_amount = round(mother_range / 2, 2)
                 
                 if breakout_candle['High'] > mother_candle['High'] and next_candle is not None and next_candle['Open'] > mother_candle['High']:
                     breakout_side = "Buy"
-                    stop_loss = round(mother_candle['High'] - stop_loss_value, 2)  # Stop-loss at half the mother candle range
-                    target = round(breakout_candle['Close'] + (breakout_candle['Close'] - stop_loss) * 1.5, 2)
+                    stop_loss = round(breakout_candle['Close'] - risk_amount, 2)
+                    target = round(breakout_candle['Close'] + (1.5 * risk_amount), 2)
+                    trailing_stop = stop_loss
                 elif breakout_candle['Low'] < mother_candle['Low'] and next_candle is not None and next_candle['Open'] < mother_candle['Low']:
                     breakout_side = "Short"
-                    stop_loss = round(mother_candle['Low'] + stop_loss_value, 2)  # Stop-loss at half the mother candle range
-                    target = round(breakout_candle['Close'] - (stop_loss - breakout_candle['Close']) * 1.5, 2)
+                    stop_loss = round(breakout_candle['Close'] + risk_amount, 2)
+                    target = round(breakout_candle['Close'] - (1.5 * risk_amount), 2)
+                    trailing_stop = stop_loss
                 
-                # If breakout_side is not determined, skip this pattern
-                if breakout_side is None:
-                    continue
+                if stop_loss is None:
+                    continue  # Ensure stop_loss is set before proceeding
                 
-                # Check if target or stop-loss is hit first
                 trade_result = "Sideways"
+                hit_target_count = 0  # Track the number of times target is hit
+                
                 for i in range(breakout_index + 1, len(daily_data)):
                     candle = daily_data.iloc[i]
+                    
                     if breakout_side == "Buy":
                         if candle['Low'] <= stop_loss:
-                            trade_result = "Stop-Loss Hit"
+                            trade_result = f"Stop-Loss Hit at {stop_loss}"
                             break
                         if candle['High'] >= target:
                             trade_result = "Target Hit"
+                            hit_target_count += 1
+                            target = round(target + (1.5 * risk_amount), 2)  # Move target to next level
+                            trailing_stop = round(trailing_stop + (0.5 * risk_amount), 2)  # Increase SL by 0.5x risk amount
+                        if trailing_stop is not None and candle['Low'] <= trailing_stop:
+                            trade_result = f"Trailing SL Hit at {trailing_stop}"
                             break
-                    elif breakout_side == "Short":
+                    else:  # Short trade
                         if candle['High'] >= stop_loss:
-                            trade_result = "Stop-Loss Hit"
+                            trade_result = f"Stop-Loss Hit at {stop_loss}"
                             break
                         if candle['Low'] <= target:
                             trade_result = "Target Hit"
+                            hit_target_count += 1
+                            target = round(target - (1.5 * risk_amount), 2)  # Move target to next level
+                            trailing_stop = round(trailing_stop - (0.5 * risk_amount), 2)  # Increase SL by 0.5x risk amount
+                        if trailing_stop is not None and candle['High'] >= trailing_stop:
+                            trade_result = f"Trailing SL Hit at {trailing_stop}"
                             break
                 
-                # If trade_result remains unchanged, the trade is sideways
-                results.append({
-                    'Date': date,
-                    'Gap': f"{round(gap_amount, 2)} ({round(gap_percentage, 2)}%)",
-                    'High': mother_candle['High'],
-                    'Low': mother_candle['Low'],
-                    'Breakout Price': breakout_candle['Close'],
-                    'Breakout Side': breakout_side,
-                    'Stop Loss': stop_loss,  # Absolute price level for stop loss
-                    'Target': target,
-                    'Result': trade_result
-                })
+                if breakout_side:
+                    results.append({
+                        'Date': date,
+                        'Gap': f"{gap_amount} ({gap_percentage}%)",
+                        'High': round(mother_candle['High'], 2),
+                        'Low': round(mother_candle['Low'], 2),
+                        'Breakout Price': round(breakout_candle['Close'], 2),
+                        'Breakout Side': breakout_side,
+                        'Stop Loss': stop_loss,
+                        'Target': target,
+                        'Trailing Stop': trailing_stop,
+                        'Target Hits': hit_target_count,
+                        'Result': trade_result
+                    })
     
     print(f"✅ {len(results)} valid breakout patterns found.")
     return results

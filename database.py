@@ -9,7 +9,7 @@ def connect_to_db():
     return db
 
 def insert_stock_data(ticker, df):
-    """Insert stock data into MongoDB, avoiding duplicates."""
+    """Insert stock data into MongoDB, ensuring numeric values are stored correctly."""
     db = connect_to_db()
     collection = db["reliance_data"]
 
@@ -17,9 +17,15 @@ def insert_stock_data(ticker, df):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = ['_'.join([str(c) for c in col if c]) for col in df.columns]
 
-    # Standardize column names before inserting into MongoDB
-    suffix = f"_{ticker.split('.')[0]}"  # Extracts "RELIANCE" from "RELIANCE.NS"
-    df.columns = [col.replace(suffix, "") if isinstance(col, str) and col.endswith(suffix) else col for col in df.columns]
+    # Remove suffix like "_RELIANCE" if present
+    suffix = f"_{ticker.split('.')[0]}"
+    df.columns = [col.replace(suffix, "") if col.endswith(suffix) else col for col in df.columns]
+
+    # ✅ Fix: Extract correct float values if stored as {"NS": value}
+    for col in ["Open", "High", "Low", "Close", "Volume"]:
+        if col in df.columns:
+            df[col] = df[col].apply(lambda x: x["NS"] if isinstance(x, dict) and "NS" in x else x)
+            df[col] = df[col].astype(float)  # Convert to float
 
     records = df.to_dict("records")  # Convert DataFrame to list of dictionaries
     for record in records:
@@ -30,7 +36,7 @@ def insert_stock_data(ticker, df):
     print(f"✅ {len(records)} records inserted/updated in MongoDB.")
 
 def get_stock_data(ticker, start_date, end_date):
-    """Retrieve stock data from MongoDB."""
+    """Retrieve stock data from MongoDB and fix incorrect data types."""
     db = connect_to_db()
     collection = db["reliance_data"]
 
@@ -48,8 +54,14 @@ def get_stock_data(ticker, start_date, end_date):
     df["Date"] = pd.to_datetime(df["date"])  # Ensure Date column is datetime
     df.drop(columns=["date"], inplace=True)  # Drop duplicate date column
 
-    # ✅ Remove '_RELIANCE' suffix after retrieving from MongoDB
-    suffix = f"_{ticker.split('.')[0]}"  # Extracts "RELIANCE" from "RELIANCE.NS"
-    df.columns = [col.replace(suffix, "") if isinstance(col, str) and col.endswith(suffix) else col for col in df.columns]
+    # ✅ Fix: Extract float values after loading from MongoDB
+    for col in ["Open", "High", "Low", "Close", "Volume"]:
+        if col in df.columns:
+            df[col] = df[col].apply(lambda x: x["NS"] if isinstance(x, dict) and "NS" in x else x)
+            df[col] = df[col].astype(float)  # Convert to float
+
+    # ✅ Fix: Remove '_RELIANCE' suffix after retrieving from MongoDB
+    suffix = f"_{ticker.split('.')[0]}"
+    df.columns = [col.replace(suffix, "") if col.endswith(suffix) else col for col in df.columns]
 
     return df

@@ -40,9 +40,10 @@ def fetch_data(ticker, start, end, interval="5m"):
         # Convert Date column to datetime and remove timezone
         existing_data["Date"] = pd.to_datetime(existing_data["Date"]).dt.tz_localize(None)
 
-        # Remove _RELIANCE suffix from column names
-        suffix = f"_{ticker.split('.')[0]}"  # Extracts "RELIANCE" from "RELIANCE.NS"
-        existing_data.columns = [col.replace(suffix, "") if isinstance(col, str) and col.endswith(suffix) else col for col in existing_data.columns]
+        # ✅ Fix: Extract correct float values if nested dictionaries exist
+        for col in ["Open", "High", "Low", "Close", "Volume"]:
+            if col in existing_data.columns:
+                existing_data[col] = existing_data[col].apply(lambda x: x[list(x.keys())[0]] if isinstance(x, dict) else x)
 
         # Store new data in MongoDB
         insert_stock_data(ticker, existing_data)

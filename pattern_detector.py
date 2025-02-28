@@ -17,8 +17,22 @@ def detect_gap_patterns(df):
         if daily_data.empty or prev_day_data.empty:
             continue
 
+        # ✅ Debugging: Print values before conversion
+        print(f"DEBUG: prev_close = {prev_day_data.iloc[-1]['Close']}, first_open = {daily_data.iloc[0]['Open']}")
+
+        # ✅ Fix: Extract correct float values
         prev_close = prev_day_data.iloc[-1]['Close']
         first_open = daily_data.iloc[0]['Open']
+
+        # If values are dictionaries, extract the first numeric value
+        if isinstance(prev_close, dict):
+            prev_close = float(list(prev_close.values())[0])
+        if isinstance(first_open, dict):
+            first_open = float(list(first_open.values())[0])
+
+        # Ensure values are floats
+        prev_close = float(prev_close)
+        first_open = float(first_open)
 
         gap_amount = round(first_open - prev_close, 2)
         gap_percentage = round((gap_amount / prev_close) * 100, 2)
